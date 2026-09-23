@@ -1,0 +1,8 @@
+{
+  "name": "artifact-drafts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "serve": "node serve.mjs"
+  }
+}
