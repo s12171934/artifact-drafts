@@ -1,0 +1,28 @@
+<title>Draft Sample Page</title>
+<style>
+  :root {
+    --ground: #f6f7f9; --ink: #1d2330; --muted: #5b6475; --accent: #2f5bd3; --rule: #dde1e8;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --ground: #12151c; --ink: #e6e9ef; --muted: #9aa3b5; --accent: #7ea0ff; --rule: #2a303c; color-scheme: dark; }
+  }
+  :root[data-theme="dark"] { --ground: #12151c; --ink: #e6e9ef; --muted: #9aa3b5; --accent: #7ea0ff; --rule: #2a303c; color-scheme: dark; }
+  body { background: var(--ground); color: var(--ink); padding: 32px 16px; }
+  main { max-width: 65ch; margin: 0 auto; display: grid; gap: 16px; }
+  h1 { margin: 0; text-wrap: balance; }
+  p { color: var(--muted); margin: 0; }
+  canvas { max-width: 100%; border: 1px solid var(--rule); }
+</style>
+<main>
+  <h1>초안 샘플</h1>
+  <p>drafts/ 아래 .html 을 수정하면 미리보기가 자동 새로고침됩니다. 아래 차트는 cdnjs 에서 불러온 Chart.js 로 그려집니다(허용 CDN 확인용).</p>
+  <canvas id="sampleChart" height="160"></canvas>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+  new Chart(document.getElementById("sampleChart"), {
+    type: "bar",
+    data: { labels: ["월", "화", "수", "목", "금"], datasets: [{ label: "예시 값", data: [3, 7, 4, 8, 5], backgroundColor: getComputedStyle(document.documentElement).getPropertyValue("--accent") }] },
+  });
+</script>
