@@ -1,0 +1,284 @@
+<title>반응형 HTML 덱</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #e9ece8; --stage: #f7f8f5; --ink: #18211d; --muted: #56625c; --rule: #cfd6d0;
+    --accent: #0c6b52; --accent-soft: #d5e8df; --warn: #a3470f; --warn-soft: #f4e1d3;
+    --slide-dark: #15201b; --slide-dark-ink: #e8efe9; --letterbox: #000;
+    --sans: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101512; --stage: #1a221e; --ink: #e3ebe5; --muted: #9aa9a1; --rule: #2e3a34;
+      --accent: #5cc8a4; --accent-soft: #1f3a30; --warn: #f0a070; --warn-soft: #3a261a;
+      --slide-dark: #0b100d; --slide-dark-ink: #e3ebe5; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101512; --stage: #1a221e; --ink: #e3ebe5; --muted: #9aa9a1; --rule: #2e3a34;
+    --accent: #5cc8a4; --accent-soft: #1f3a30; --warn: #f0a070; --warn-soft: #3a261a;
+    --slide-dark: #0b100d; --slide-dark-ink: #e3ebe5; color-scheme: dark;
+  }
+
+  body { background: var(--ground); color: var(--ink); font-family: var(--sans); padding-inline: 16px; padding-block: 24px 40px; }
+  .shell { max-width: 1200px; margin: 0 auto; display: grid; gap: 14px; }
+
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+  .bar h1 { margin: 0; font-size: 18px; font-weight: 600; }
+  .bar .section { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+
+  .modes { display: flex; gap: 4px; flex-wrap: wrap; }
+  .modes button { font: 500 13px var(--sans); color: var(--muted); background: transparent; border: 1px solid var(--rule);
+    border-radius: 6px; padding: 6px 12px; cursor: pointer; }
+  .modes button[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+  .modes button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .layout { display: grid; gap: 16px; }
+  .layout.with-panel { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+  @media (max-width: 900px) { .layout.with-panel { grid-template-columns: minmax(0, 1fr); } }
+  .main { display: grid; gap: 14px; min-width: 0; }
+
+  /* 1920×1080 캔버스를 JS가 폭에 맞춰 축소한다 */
+  .viewport { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; overflow: hidden;
+    border: 1px solid var(--rule); border-radius: 6px; background: var(--stage); }
+  .viewport.filled { position: fixed; inset: 0; z-index: 10; aspect-ratio: auto; border: 0; border-radius: 0; background: var(--letterbox);
+    padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+  .viewport:fullscreen { background: var(--letterbox); border: 0; border-radius: 0; }
+  .canvas { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
+  .preview .canvas { pointer-events: none; }
+  .corner { position: absolute; right: 10px; bottom: 10px; z-index: 2; font: 500 12px var(--sans); color: var(--ink);
+    background: var(--stage); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px; cursor: pointer; opacity: .85; }
+  .corner:hover, .corner:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .panel { display: grid; gap: 14px; align-content: start; }
+  .panel h2 { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .panel .block { display: grid; gap: 8px; }
+  .notes { box-sizing: border-box; width: 100%; min-height: 240px; margin: 0; padding: 12px 14px; resize: vertical;
+    font: 16px/1.6 var(--sans); color: var(--ink); background: var(--stage); border: 1px solid var(--rule); border-radius: 6px; }
+  .notes:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
+  .notes-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+  .notes-bar .save { font: 500 14px var(--sans); color: var(--ink); background: var(--accent-soft); border: 1px solid var(--accent);
+    border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+  .notes-bar .save:disabled { background: transparent; border-color: var(--rule); color: var(--muted); cursor: default; }
+  .notes-bar .save:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .notes-status { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .notes-status[data-state="dirty"] { color: var(--warn); }
+  .status { font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--rule); flex: none; }
+  .status[data-state="live"]::before { background: var(--accent); }
+  .status[data-state="error"]::before { background: var(--warn); }
+  .audience-link { font-size: 14px; line-height: 1.5; color: var(--muted); margin: 0; overflow-wrap: anywhere; }
+  .audience-link a { color: var(--accent); }
+
+  .slide { word-break: keep-all; position: absolute; inset: 0; padding: 128px; display: flex; flex-direction: column; gap: 48px;
+    background: var(--stage); color: var(--ink); }
+  .slide.dark { background: var(--slide-dark); color: var(--slide-dark-ink); }
+  .slide h2 { margin: 0; font-size: 72px; line-height: 1.1; font-weight: 700; letter-spacing: -1px; text-wrap: balance; }
+  .slide p { margin: 0; font-size: 34px; line-height: 1.45; color: var(--muted); max-width: 1400px; }
+  .slide.dark p { color: color-mix(in srgb, var(--slide-dark-ink) 70%, transparent); }
+  .eyebrow { font-family: var(--mono); font-size: 28px; letter-spacing: 2px; text-transform: uppercase; color: var(--accent); }
+  .footer { position: absolute; left: 128px; right: 128px; bottom: 64px; display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 24px; color: var(--muted); }
+
+  .cover { justify-content: flex-end; }
+  .cover h2 { font-size: 132px; }
+
+  .flow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .flow > div { border: 2px solid var(--rule); border-radius: 12px; padding: 40px; display: grid; gap: 16px; align-content: start; }
+  .flow code { font-family: var(--mono); font-size: 30px; color: var(--accent); }
+  .flow span { font-size: 30px; line-height: 1.4; color: var(--muted); }
+
+  .compare { width: 100%; border-collapse: collapse; font-size: 30px; }
+  .compare th, .compare td { text-align: left; padding: 20px 24px; border-bottom: 2px solid var(--rule); vertical-align: top; }
+  .compare th { font-family: var(--mono); font-size: 26px; font-weight: 500; color: var(--muted); }
+  .compare td:first-child { color: var(--muted); width: 22%; }
+
+  .live { display: grid; grid-template-columns: 1fr 1fr; gap: 64px; align-items: start; }
+  .control { display: grid; gap: 14px; }
+  .control label { font-size: 30px; display: flex; justify-content: space-between; }
+  .control output { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .control input { width: 100%; accent-color: var(--accent); height: 40px; }
+  .control .reset { justify-self: start; font: 500 28px var(--sans); color: var(--ink); background: var(--stage);
+    border: 2px solid var(--rule); border-radius: 10px; padding: 14px 28px; cursor: pointer; }
+  .control .reset:hover:not(:disabled) { border-color: var(--accent); }
+  .control .reset:disabled { opacity: .45; cursor: default; }
+  .control .reset:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .verdict { border-radius: 16px; padding: 48px; display: grid; gap: 20px; background: var(--accent-soft); }
+  .verdict.over { background: var(--warn-soft); }
+  .verdict strong { font-size: 64px; line-height: 1.1; color: var(--accent); }
+  .verdict.over strong { color: var(--warn); }
+  .meter { height: 24px; border-radius: 12px; background: var(--stage); overflow: hidden; }
+  .meter > i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+  .verdict.over .meter > i { background: var(--warn); }
+
+  .nav { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .nav button { font: 500 14px var(--sans); color: var(--ink); background: var(--stage); border: 1px solid var(--rule);
+    border-radius: 6px; padding: 8px 14px; cursor: pointer; }
+  .nav button:hover:not(:disabled) { border-color: var(--accent); }
+  .nav button:disabled { opacity: .45; cursor: default; }
+  .nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .nav .count { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+  /* 하단 슬라이드 목록: 좌우로 스크롤하며 모든 슬라이드를 축소해 보여 준다 */
+  .strip { position: relative; display: flex; gap: 12px; overflow-x: auto; padding-block: 4px 10px; scroll-snap-type: x proximity; }
+  .strip button { flex: none; width: 208px; display: grid; gap: 6px; padding: 6px; font: 13px var(--sans); color: var(--muted);
+    text-align: left; background: transparent; border: 1px solid var(--rule); border-radius: 8px; cursor: pointer; scroll-snap-align: start; }
+  .strip button .viewport { border-radius: 4px; }
+  .strip button:hover { border-color: var(--accent); }
+  .strip button[aria-current="true"] { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
+  .strip button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) { .meter > i { transition: none; } }
+</style>
+
+<div class="shell">
+  <header class="bar">
+    <h1 id="deckTitle"></h1>
+    <div class="modes" id="modes" role="group" aria-label="보기 모드">
+      <button type="button" data-mode="solo">혼자 보기</button>
+      <button type="button" data-mode="presenter" id="presenterModeButton">발표자</button>
+      <button type="button" data-mode="audience">청중</button>
+    </div>
+  </header>
+  <div class="layout" id="layout">
+    <div class="main">
+      <div class="viewport" id="viewport">
+        <div class="canvas" id="canvas"></div>
+        <button class="corner" id="fullscreenButton" type="button">전체화면</button>
+      </div>
+      <div class="nav" id="nav">
+        <button id="prevButton" type="button">← 이전</button>
+        <button id="nextButton" type="button">다음 →</button>
+        <span class="count" id="counter"></span>
+      </div>
+      <p class="status" id="syncStatus" data-state="idle"></p>
+    </div>
+    <aside class="panel" id="presenterPanel" hidden>
+      <div class="block">
+        <h2><label for="notesInput">발표 노트 · 나만 보기</label></h2>
+        <textarea class="notes" id="notesInput" rows="10" spellcheck="false"></textarea>
+        <div class="notes-bar">
+          <button class="save" id="saveNotesButton" type="button" disabled>노트 저장</button>
+          <span class="notes-status" id="notesStatus" data-state="idle"></span>
+        </div>
+      </div>
+      <div class="block">
+        <h2>청중 창</h2>
+        <p class="audience-link" id="audienceLink"></p>
+      </div>
+    </aside>
+  </div>
+  <nav class="strip" id="strip" aria-label="슬라이드 목록"></nav>
+</div>
+
+<!--
+  슬라이드는 여기 <slide> 태그로 쓴다. 순서가 곧 슬라이드 순서다. 틀(deck.js)이 읽어서 보여 준다.
+  <template id="slides" data-title data-url>
+    data-title  덱 제목. 상단 제목과 슬라이드 푸터에 쓴다. 비우면 <title>을 쓴다
+    data-url    이 덱을 퍼블리시한 아티팩트 주소 (claude.ai/artifact/…). 발표자 패널의 "청중 창 새로 열기"가
+                이 주소에 #audience를 붙여 연다. 페이지는 격리된 프레임에서 돌아 자기 공유 주소를 알 수 없으므로
+                퍼블리시 후 받은 주소를 여기 적는다. 비우면 링크 대신 "링크를 직접 열라"는 안내가 나온다
+  <slide id label [section] [class] [footer]>
+    id       슬라이드 고유 이름 (#id 링크로 바로 열린다)
+    label    하단 슬라이드 목록에 보이는 이름
+    section  이 슬라이드에서 시작하는 섹션 이름
+    class    슬라이드 바탕에 붙일 클래스 (dark, cover 등)
+    footer   붙이면 하단에 덱 제목과 쪽 번호를 단다
+  <notes>는 발표 노트 기본값, <script type="text/slide">는 슬라이드별 스크립트다.
+  스크립트는 슬라이드가 화면에 붙을 때마다 실행되고 `slide`를 받는다 (deck.js 머리말 참고).
+-->
+<template id="slides" data-title="반응형 HTML 덱" data-url="https://claude.ai/artifact/HTyHxD4oguwsJ5NDB9VQQs">
+  <slide id="cover" label="표지" section="왜 일반 HTML 덱인가" class="dark cover">
+    <notes>오늘은 Slides 타입과 일반 HTML 덱의 차이를 보고, 직접 조작되는 슬라이드를 하나 시연합니다.</notes>
+    <span class="eyebrow">Artifact · other</span>
+    <h2>반응형 HTML 덱</h2>
+    <p>Slides 타입의 파일 구조를 그대로 따르되, 슬라이드를 HTML 태그로 쓰고 틀이 그린다.</p>
+  </slide>
+
+  <slide id="structure" label="구조" section="덱 데이터와 렌더 흐름" footer>
+    <notes>슬라이드는 HTML의 slide 태그, 틀은 deck.js입니다. 슬라이드마다 필요한 스크립트만 태그 안에 둡니다.</notes>
+    <span class="eyebrow">구조</span>
+    <h2>슬라이드 태그 → 틀 → 화면</h2>
+    <div class="flow">
+      <div><code>&lt;slide&gt;</code><span>마크업, 발표 노트, 슬라이드별 스크립트를 한 태그 안에 둔다.</span></div>
+      <div><code>deck.js</code><span>슬라이드를 읽어 보여 주고, 넘기고, 창끼리 동기화하는 틀.</span></div>
+      <div><code>slide.set()</code><span>조작 값이 바뀌면 슬라이드의 onUpdate만 다시 불러 화면을 고친다.</span></div>
+    </div>
+  </slide>
+
+  <slide id="compare" label="비교" footer>
+    <notes>PPTX가 필요하면 Slides 타입, 조작이 필요하면 HTML 덱. 둘은 대체재가 아니라 용도가 다릅니다.</notes>
+    <span class="eyebrow">비교</span>
+    <h2>무엇을 얻고 무엇을 잃나</h2>
+    <table class="compare">
+      <tr><th></th><th>Slides 타입</th><th>이 HTML 덱</th></tr>
+      <tr><td>스크립트</td><td>x-embed 안에서만, 조작 불가</td><td>페이지 전체에서 자유롭게</td></tr>
+      <tr><td>상호작용</td><td>없음</td><td>입력, 슬라이더, 계산</td></tr>
+      <tr><td>내보내기</td><td>PPTX · PDF 다운로드</td><td>없음</td></tr>
+      <tr><td>편집 · 코멘트</td><td>슬라이드 편집기 제공</td><td>코드로만 수정</td></tr>
+    </table>
+  </slide>
+
+  <slide id="budget" label="x-embed 예산" section="직접 조작해 보기" footer>
+    <notes>슬라이더를 움직이면 청중 화면도 같은 값으로 바뀝니다. 12개나 20KB로 올려 한도 초과를 보여 주세요.</notes>
+    <span class="eyebrow">직접 조작</span>
+    <h2>이 슬라이드를 Slides 타입으로 옮긴다면</h2>
+    <div class="live">
+      <div class="control">
+        <label for="embedCount">슬라이드당 임베드 수 <output data-out="embedCount"></output></label>
+        <input id="embedCount" data-control="embedCount" type="range" min="1" max="12">
+        <label for="embedKb">임베드 하나의 크기 <output data-out="embedKb"></output></label>
+        <input id="embedKb" data-control="embedKb" type="range" min="2" max="32" step="2">
+        <p data-out="total"></p>
+        <button class="reset" data-action="reset" type="button"></button>
+      </div>
+      <div class="verdict" data-out="verdict">
+        <strong data-out="verdictTitle"></strong>
+        <div class="meter" aria-hidden="true"><i data-out="meter"></i></div>
+        <p data-out="verdictText"></p>
+      </div>
+    </div>
+    <script type="text/slide">
+      const limits = { perSlide: 8, kbEach: 16 };
+      const defaults = { embedCount: 3, embedKb: 12 };
+      const $ = (name) => slide.root.querySelector(`[data-out="${name}"]`);
+      const inputs = Object.keys(defaults).map((key) => slide.root.querySelector(`[data-control="${key}"]`));
+      const reset = slide.root.querySelector('[data-action="reset"]');
+
+      reset.textContent = `기본값으로 (${defaults.embedCount}개 · ${defaults.embedKb}KB)`;
+      for (const input of inputs) {
+        input.addEventListener("input", () => slide.set({ [input.dataset.control]: Number(input.value) }, { debounce: true }));
+      }
+      reset.addEventListener("click", () => slide.set(defaults));
+
+      slide.onUpdate((values) => {
+        const { embedCount, embedKb } = { ...defaults, ...values };
+        const over = embedCount > limits.perSlide || embedKb > limits.kbEach;
+        for (const input of inputs) {
+          const value = String(input.dataset.control === "embedCount" ? embedCount : embedKb);
+          if (input.value !== value) input.value = value;
+        }
+        $("embedCount").textContent = `${embedCount}개`;
+        $("embedKb").textContent = `${embedKb}KB`;
+        $("total").textContent = `합계 ${embedCount * embedKb}KB. 한도는 임베드당 ${limits.kbEach}KB, 슬라이드당 ${limits.perSlide}개.`;
+        $("verdict").classList.toggle("over", over);
+        $("verdictTitle").textContent = over ? "한도 초과" : "한도 안";
+        $("meter").style.width = `${Math.min(100, (embedKb / limits.kbEach) * 100)}%`;
+        $("verdictText").textContent = over
+          ? "Slides 타입에 넣으려면 임베드를 나누거나 줄여야 한다."
+          : "Slides 타입에서도 x-embed로 옮길 수 있다. 단, 보는 사람은 조작할 수 없다.";
+      });
+    </script>
+  </slide>
+
+  <slide id="next" label="다음 단계" class="dark">
+    <notes>질문을 받습니다.</notes>
+    <span class="eyebrow">다음 단계</span>
+    <h2>슬라이드를 추가하려면 slide 태그 하나를</h2>
+    <p>틀은 그대로 두고 태그만 더한다. 발표용 PPTX가 필요하면 같은 내용을 Slides 타입으로 옮긴다.</p>
+  </slide>
+</template>
+
+<script src="https://cdn.jsdelivr.net/npm/@s-dante/artifact-deck@0.1.0/deck.js"></script>

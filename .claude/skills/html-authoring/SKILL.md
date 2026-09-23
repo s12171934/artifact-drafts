@@ -22,9 +22,14 @@ description: 이 저장소에서 HTML을 새로 쓰거나 고칠 때 항상 로�
 - 파일을 여러 개로 나눠야 하면 각 파일을 실행 순서대로 `<script src>` 태그로 각각 링크한다.
 - 로컬 파일끼리 `import`로 연결하지 않는다 (`type="module"`의 상대 `import` 금지). 퍼블리시 빌드(`build.mjs`)는 HTML에 링크된 파일만 인라인하므로, `import`로 불러오는 파일은 배포된 페이지에서 사라진다.
 - 라이브러리는 로컬에 복사하지 않는다. 공식 CDN 링크(허용목록은 artifact-draft 스킬 참고)가 있으면 그 링크를 쓴다.
+- 여러 페이지가 함께 쓰는 틀 코드는 `packages/<이름>/`에 두고 npm에 배포한 뒤 jsDelivr npm 경로로 링크한다. 예: `deck.js`는 `packages/deck/`의 `@s-dante/artifact-deck`이며 `<script src="https://cdn.jsdelivr.net/npm/@s-dante/artifact-deck@0.1.0/deck.js"></script>`로 쓴다.
+  - 버전은 정확히 고정한다(`@latest`·`@0` 금지. jsDelivr가 최대 7일 캐시한다).
+  - 틀 코드를 고치면 `package.json` 버전을 올리고, 사용자가 `npm publish`한 뒤, 그 틀을 쓰는 HTML의 버전을 함께 올린다.
+  - `cdn.jsdelivr.net/gh/`나 다른 CDN은 CSP에 막히므로 쓰지 않는다. `fetch()`로 받아 `eval`하지 않고 `<script src>`로 링크한다.
 
 ## 3. 예외: 인라인
 
 - 사용자가 "HTML 안에 스크립트를 넣어라", "한 파일로 만들어라"처럼 **명시한 경우에만** HTML 안에 `<script>…</script>`로 쓴다.
 - 짧아서, 간단해서, 한 번만 써서 등의 이유로 스스로 인라인하지 않는다.
 - 인라인한 스크립트는 퍼블리시 빌드가 그대로 둔다. 이 경우에도 1절의 인라인 이벤트 속성 금지는 지킨다.
+- 사용자가 정한 구조로 HTML 안에 둔 스크립트는 `.js`로 옮기지 않는다. 예: `drafts/deck.html`의 슬라이드별 스크립트는 `<slide>` 안의 `<script type="text/slide">`에 둔다. 이 스크립트는 틀(`@s-dante/artifact-deck`의 `deck.js`)이 슬라이드를 붙일 때 실행한다.
