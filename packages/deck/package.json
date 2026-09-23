@@ -1,8 +1,20 @@
 {
   "name": "@s-dante/artifact-deck",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Artifact 덱 틀: <slide> 템플릿을 읽어 보여 주고, 넘기고, 창끼리 동기화한다.",
   "main": "deck.js",
-  "files": ["deck.js"],
+  "files": ["deck.js", "notes-editor.js"],
+  "scripts": {
+    "build": "node build-editor.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "devDependencies": {
+    "@tiptap/core": "3.31.3",
+    "@tiptap/extensions": "3.31.3",
+    "@tiptap/markdown": "3.31.3",
+    "@tiptap/pm": "3.31.3",
+    "@tiptap/starter-kit": "3.31.3",
+    "esbuild": "0.28.2"
+  },
   "license": "MIT"
 }

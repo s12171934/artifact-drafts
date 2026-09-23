@@ -12,6 +12,8 @@ npm run serve             # http://localhost:5178  (PORT=xxxx npm run serve 로 
 - 상단 바에서 테마(system/light/dark → `data-theme` 스탬프)와 폭(full/tablet/phone 400px)을 바꿔 본다.
 - 스크립트는 공식 CDN 링크가 있으면 그 링크를 쓰고, 없으면 `drafts/` 안의 `.js` 로 분리해 상대 경로로 링크한다.
 - 여러 페이지가 쓰는 틀 코드는 `packages/` 아래 npm 패키지로 두고 `cdn.jsdelivr.net/npm/<패키지>@<버전>/…` 으로 링크한다 (예: `packages/deck` → `@s-dante/artifact-deck`). 고치면 버전을 올려 `npm publish --access public` 후 HTML 링크 버전도 올린다.
+- `npm run serve` 는 덱 틀 CDN 링크(`@s-dante/artifact-deck@…/`)를 `packages/deck` 작업본으로 바꿔 보여 준다. 배포하기 전에 로컬에서 틀 수정을 확인할 수 있고, 퍼블리시본에는 CDN 링크가 그대로 남는다. 발표 노트 편집기(`notes-editor.js`, Tiptap 번들)는 요청할 때 `notes-editor.src.js` 에서 메모리로 빌드한다. 처음 한 번 루트에서 `npm install` 이 필요하다 (workspaces).
+- 덱 틀을 배포할 때는 `packages/deck` 에서 `npm publish --access public` 한다. `prepublishOnly` 가 `notes-editor.js` 를 빌드해 함께 올린다 (저장소에는 커밋하지 않는다).
 - 발표 덱은 배포용 스킬 `skills/artifact-deck/` 의 템플릿(`assets/template.html`)을 `drafts/<이름>.html` 로 복사해 시작한다. 완성된 예는 `drafts/deck-example.html` (스킬 예제로의 심볼릭 링크).
 - 로컬 서버는 덱 초안(`<template id="slides">` 가 있는 페이지) 끝에 `dev/deck-samples.html` 의 샘플 슬라이드(숫자·코드·단계·퀴즈)를 끼워 보여 준다. 파일은 건드리지 않으므로 퍼블리시본에는 들어가지 않는다. 상단 바의 `deck samples` 로 끄고 켠다.
 - `npm run build` (또는 `npm run build -- drafts/x.html`) 가 로컬 스크립트를 인라인한 퍼블리시용 HTML 을 `dist/` 에 만든다. 퍼블리시는 `dist/` 파일로 한다.

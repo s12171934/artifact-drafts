@@ -6,6 +6,10 @@ import { join, extname, normalize } from "node:path";
 
 const draftsDirectory = new URL("./drafts/", import.meta.url).pathname;
 const deckSamplesPath = new URL("./dev/deck-samples.html", import.meta.url).pathname;
+const deckPackageDirectory = new URL("./packages/deck/", import.meta.url).pathname;
+// 덱 틀은 CDN 대신 packages/deck의 작업본을 쓴다. 퍼블리시본에는 CDN 링크가 그대로 남는다
+const deckCdnPattern = /https:\/\/cdn\.jsdelivr\.net\/npm\/@s-dante\/artifact-deck@[^/"]+\//g;
+const localDeckPrefix = "/__deck/";
 const port = Number(process.env.PORT ?? 5178);
 
 const artifactContentSecurityPolicy = [
@@ -33,6 +37,37 @@ const reloadSubscribers = new Set();
 const notifyReload = () => { for (const subscriber of reloadSubscribers) subscriber.write("data: reload\n\n"); };
 watch(draftsDirectory, { recursive: true }, notifyReload);
 watch(deckSamplesPath, notifyReload);
+watch(deckPackageDirectory, (_event, fileName) => {
+  if (fileName === "notes-editor.src.js") builtEditor = null;
+  if (fileName === "deck.js" || fileName === "notes-editor.src.js") notifyReload();
+});
+
+// notes-editor.js는 번들이라 요청 때 메모리로 빌드하고, 소스가 바뀔 때까지 재사용한다
+let builtEditor = null;
+async function serveDeckFile(fileName, response) {
+  const headers = { "content-type": "text/javascript", "content-security-policy": artifactContentSecurityPolicy, "cache-control": "no-store" };
+  if (fileName === "deck.js") {
+    response.writeHead(200, headers);
+    response.end(await readFile(join(deckPackageDirectory, "deck.js")));
+    return;
+  }
+  if (fileName === "notes-editor.js") {
+    const { buildEditor } = await import(join(deckPackageDirectory, "build-editor.mjs"));
+    builtEditor ??= buildEditor({ write: false });
+    try {
+      const bundle = await builtEditor;
+      response.writeHead(200, headers);
+      response.end(bundle);
+    } catch (error) {
+      builtEditor = null;
+      throw error;
+    }
+    return;
+  }
+  const notFound = new Error(`no such deck file: ${fileName}`);
+  notFound.code = "ENOENT";
+  throw notFound;
+}
 
 // Deck drafts get dev/deck-samples.html's slides appended to their slide template (styles to the page end), only while serving.
 async function injectDeckSamples(pageHtml) {
@@ -122,6 +157,10 @@ createServer(async (request, response) => {
       response.end(previewShell(url.pathname.slice("/view/".length)));
       return;
     }
+    if (url.pathname.startsWith(localDeckPrefix)) {
+      await serveDeckFile(url.pathname.slice(localDeckPrefix.length), response);
+      return;
+    }
     const isRawPage = url.pathname.startsWith("/raw/");
     const relativePath = isRawPage ? url.pathname.slice("/raw/".length) : url.pathname.slice(1);
     const filePath = resolveInsideDrafts(relativePath);
@@ -130,7 +169,8 @@ createServer(async (request, response) => {
     const headers = { "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream", "content-security-policy": artifactContentSecurityPolicy, "cache-control": "no-store" };
     response.writeHead(200, headers);
     if (isRawPage && extname(filePath) === ".html") {
-      const pageHtml = url.searchParams.get("samples") === "off" ? String(fileContents) : await injectDeckSamples(String(fileContents));
+      const draftHtml = String(fileContents).replace(deckCdnPattern, localDeckPrefix);
+      const pageHtml = url.searchParams.get("samples") === "off" ? draftHtml : await injectDeckSamples(draftHtml);
       response.end(publishSkeletonHead + pageHtml + "</body></html>");
     } else {
       response.end(fileContents);

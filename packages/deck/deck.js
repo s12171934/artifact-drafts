@@ -11,9 +11,13 @@
 // 동기화 문서 (artifact db, 없으면 같은 브라우저 탭끼리 BroadcastChannel)
 //   presentation/current   현재 슬라이드. 편집 권한이 있는 사람이 발표자 창이나 청중 창에서 넘기면 양쪽이 따라간다
 //   presentation/controls  조작 값. 발표자와 청중 모두 쓰고 모두 따라간다
-//   data/users/<id>/speakerNotes  각자의 발표 노트
+//   data/users/<id>/speakerNotes  각자의 발표 노트 (마크다운)
+//
+// 발표 노트 편집기는 같은 폴더의 notes-editor.js(Tiptap 번들)를 불러와 textarea 자리에 붙인다. 못 불러오면 textarea로 쓴다.
 
 // ---- 슬라이드 읽기 ----
+// 인라인되면 src가 없으므로 편집기를 불러오지 않는다
+const frameBase = document.currentScript?.src || "";
 const source = document.getElementById("slides");
 const setupRegistry = (window.__deckSlideSetups = {});
 
@@ -24,6 +28,13 @@ function compileSetup(id, code) {
   document.head.append(element);
   element.remove();
   return setupRegistry[id] ?? null;
+}
+
+// <notes> 안의 마크다운은 태그에 맞춰 들여쓰므로 공통 들여쓰기를 걷어낸다. 남겨 두면 코드 블록으로 읽힌다
+function dedent(text) {
+  const lines = text.replace(/^\s*\n/, "").trimEnd().split("\n");
+  const indent = Math.min(...lines.filter((line) => line.trim()).map((line) => line.match(/^[ \t]*/)[0].length));
+  return Number.isFinite(indent) ? lines.map((line) => line.slice(indent)).join("\n") : "";
 }
 
 function readSlide(element) {
@@ -37,7 +48,7 @@ function readSlide(element) {
     section: element.getAttribute("section"),
     className: element.getAttribute("class") ?? "",
     footer: element.hasAttribute("footer"),
-    notes: notes?.textContent.trim() ?? "",
+    notes: notes ? dedent(notes.textContent) : "",
     body,
     setup: script ? compileSetup(element.id, script.textContent) : null,
   };
@@ -72,11 +83,16 @@ const stripOrientations = ["horizontal", "vertical"];
 function initialStrip() {
   try { return stripOrientations.includes(localStorage.getItem("deckStrip")) ? localStorage.getItem("deckStrip") : "horizontal"; } catch { return "horizontal"; }
 }
+// 전체 펼치기 고정도 이 브라우저에만 기억한다. 고정하면 슬라이드를 골라도 펼친 목록이 접히지 않는다
+function initialGridPinned() {
+  try { return localStorage.getItem("deckGridPinned") === "true"; } catch { return false; }
+}
 
 let state = {
   mode: initialMode(),
   strip: initialStrip(),
-  grid: false,
+  grid: initialGridPinned(),
+  gridPinned: initialGridPinned(),
   index: Math.max(0, indexOfSlide(hashToken)),
   values: {},
   canPresent: true,
@@ -254,9 +270,12 @@ async function connectSync() {
   render();
 }
 
-// ---- 발표 노트: 슬라이드별로 고쳐 쓰고, 저장하면 이 사람의 db 개인 영역에 남는다 ----
+// ---- 발표 노트: 슬라이드별로 고쳐 쓰면 입력이 멈출 때 이 사람의 db 개인 영역에 자동 저장된다 ----
+// 내용은 마크다운 문자열이다. 편집기가 붙기 전과 못 붙었을 때는 textarea에 원문을 그대로 보인다
 const notesInput = document.getElementById("notesInput");
-const saveNotesButton = document.getElementById("saveNotesButton");
+// 입력이 멈추고 이만큼 지나면 저장한다. 실패하면 retryDelay 뒤에 다시 시도한다
+const autosaveDelay = 3000;
+const retryDelay = 5000;
 const notesStatus = document.getElementById("notesStatus");
 
 const notes = {
@@ -266,6 +285,10 @@ const notes = {
   shownSlide: null,
   saving: false,
   message: "",
+  editor: null,
+  timer: 0,
+  refused: false,
+  failed: false,
 
   textFor(slide) {
     return this.drafts[slide.id] ?? this.saved[slide.id] ?? slide.notes;
@@ -282,6 +305,8 @@ const notes = {
     }
     this.shownSlide = null;
     this.render();
+    // 불러오기 전에 쓴 내용이 있으면 이어서 저장한다
+    this.schedule();
   },
 
   unavailable(message) {
@@ -292,12 +317,27 @@ const notes = {
 
   edit(value) {
     this.drafts[deck.slides[state.index].id] = value;
-    this.message = "";
+    if (this.ref) {
+      this.message = "";
+      this.failed = false;
+    }
     this.render();
+    this.schedule();
+  },
+
+  schedule(delay = autosaveDelay) {
+    clearTimeout(this.timer);
+    if (this.ref && !this.refused) this.timer = setTimeout(() => this.save(), delay);
+  },
+
+  // 창을 닫거나 다른 탭으로 갈 때처럼 기다릴 수 없으면 바로 저장한다
+  flush() {
+    clearTimeout(this.timer);
+    this.save();
   },
 
   async save() {
-    if (!this.ref || this.saving || !Object.keys(this.drafts).length) return;
+    if (!this.ref || this.refused || this.saving || !Object.keys(this.drafts).length) return;
     const next = { ...this.saved, ...this.drafts };
     const written = { ...this.drafts };
     this.saving = true;
@@ -307,37 +347,75 @@ const notes = {
       this.saved = next;
       // 저장하는 동안 더 고친 내용은 초안으로 남긴다
       for (const [id, text] of Object.entries(written)) if (this.drafts[id] === text) delete this.drafts[id];
+      this.failed = false;
       this.message = `저장됨 ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     } catch (error) {
-      this.message = error?.code === "invalid_argument" ? "이 계정으로는 노트를 저장할 수 없습니다" : "저장하지 못했습니다. 다시 눌러 주세요";
+      this.refused = error?.code === "invalid_argument";
+      this.failed = !this.refused;
+      this.message = this.refused ? "이 계정으로는 노트를 저장할 수 없습니다" : "저장하지 못했습니다. 잠시 뒤 다시 시도합니다";
+      if (this.failed) this.schedule(retryDelay);
     }
     this.saving = false;
     this.render();
+    // 저장하는 동안 더 쓴 내용은 이어서 저장한다
+    if (!this.refused && !this.failed && Object.keys(this.drafts).length) this.schedule();
   },
 
   render() {
     const slide = deck.slides[state.index];
     // 입력 중인 커서를 지키려고 슬라이드가 바뀔 때만 내용을 바꾼다
     if (this.shownSlide !== slide.id) {
-      notesInput.value = this.textFor(slide);
+      if (this.editor) this.editor.setMarkdown(this.textFor(slide));
+      else notesInput.value = this.textFor(slide);
       this.shownSlide = slide.id;
     }
     const unsaved = Object.keys(this.drafts).length;
-    saveNotesButton.disabled = !this.ref || this.saving || !unsaved;
-    saveNotesButton.textContent = this.saving ? "저장 중…" : "노트 저장";
-    notesStatus.textContent = this.message || (unsaved ? `저장하지 않은 슬라이드 ${unsaved}장` : this.ref ? "변경 사항 없음" : "");
-    notesStatus.dataset.state = unsaved && !this.message ? "dirty" : "idle";
+    if (this.saving) notesStatus.textContent = "저장 중…";
+    else notesStatus.textContent = this.message || (unsaved ? "입력을 멈추면 저장됩니다" : this.ref ? "변경 사항 없음" : "");
+    notesStatus.dataset.state = unsaved && (!this.ref || this.refused || this.failed) ? "dirty" : "idle";
   },
 };
 
 notesInput.addEventListener("input", () => notes.edit(notesInput.value));
-saveNotesButton.addEventListener("click", () => notes.save());
+// Cmd/Ctrl+S는 기다리지 않고 바로 저장한다
 notesInput.addEventListener("keydown", (event) => {
   if ((event.metaKey || event.ctrlKey) && event.key === "s") {
     event.preventDefault();
-    notes.save();
+    notes.flush();
   }
 });
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") notes.flush(); });
+window.addEventListener("pagehide", () => notes.flush());
+
+function loadNotesEditor() {
+  if (!frameBase) return;
+  const script = document.createElement("script");
+  script.src = new URL("notes-editor.js", frameBase).href;
+  script.addEventListener("load", () => {
+    if (!window.DeckNotesEditor) return;
+    const host = document.createElement("div");
+    host.className = "notes notes-rich";
+    try {
+      notes.editor = window.DeckNotesEditor.create({
+        element: host,
+        label: "발표 노트",
+        placeholder: "할 말을 쓰세요. # 제목, - 목록, **굵게**, `코드`가 바로 서식으로 바뀝니다",
+        onChange: (markdown) => notes.edit(markdown),
+        onSave: () => notes.flush(),
+      });
+    } catch (error) {
+      console.error("notes editor failed", error);
+      return;
+    }
+    // textarea에 쓰던 중이면 그 내용을 이어받는다
+    notes.shownSlide = null;
+    notesInput.replaceWith(host);
+    document.querySelector('label[for="notesInput"]')?.addEventListener("click", () => notes.editor.focus());
+    notes.render();
+  });
+  script.addEventListener("error", () => console.warn("notes editor could not load; using plain text notes"));
+  document.head.append(script);
+}
 
 // ---- 슬라이드 붙이기 ----
 // host 안에 슬라이드를 새로 만들고 슬라이드 스크립트를 실행한다
@@ -400,8 +478,9 @@ const fullscreenButton = document.getElementById("fullscreenButton");
 const presenterModeButton = document.getElementById("presenterModeButton");
 const stripTools = document.getElementById("stripTools");
 const gridButton = document.getElementById("gridButton");
+const gridPinButton = document.getElementById("gridPinButton");
 
-// 슬라이드 목록: 각 항목이 해당 슬라이드를 축소해 보여 준다. 누르면 그 슬라이드로 가고 펼친 목록은 접힌다
+// 슬라이드 목록: 각 항목이 해당 슬라이드를 축소해 보여 준다. 누르면 그 슬라이드로 가고 펼친 목록은 (고정하지 않았으면) 접힌다
 const stripItems = deck.slides.map((slide, index) => {
   const button = document.createElement("button");
   button.type = "button";
@@ -414,7 +493,7 @@ const stripItems = deck.slides.map((slide, index) => {
   const label = document.createElement("span");
   label.textContent = `${index + 1}. ${slide.label}`;
   button.append(frame, label);
-  button.addEventListener("click", () => setState({ index, grid: false }));
+  button.addEventListener("click", () => setState({ index, grid: state.gridPinned }));
   strip.append(button);
   return { slide, button, frame, target, mounted: mountSlide(target, slide, { interactive: false, preview: true }) };
 });
@@ -450,6 +529,7 @@ function render() {
   gridButton.setAttribute("aria-expanded", String(showGrid));
   gridButton.setAttribute("aria-pressed", String(showGrid));
   gridButton.textContent = showGrid ? "목록 접기" : "전체 펼치기";
+  gridPinButton.setAttribute("aria-pressed", String(state.gridPinned));
   if (isPresenter) renderPresenterPanel();
 
   const section = sectionOf(state.index);
@@ -547,6 +627,18 @@ function setStrip(orientation) {
   setState({ strip: orientation });
 }
 
+// 고정을 켜면 목록을 펼치고, 끄면 펼친 상태는 그대로 둔다. 목록 접기를 누르면 고정도 풀린다
+function setGridPinned(pinned) {
+  try { localStorage.setItem("deckGridPinned", String(pinned)); } catch {}
+  setState({ gridPinned: pinned, grid: pinned || state.grid });
+}
+function setGrid(open) {
+  if (!open && state.gridPinned) {
+    try { localStorage.setItem("deckGridPinned", "false"); } catch {}
+    setState({ grid: false, gridPinned: false });
+  } else setState({ grid: open });
+}
+
 function setFilled(on) {
   viewport.classList.toggle("filled", on);
   fullscreenButton.textContent = on ? "닫기" : "전체화면";
@@ -563,14 +655,16 @@ prevButton.addEventListener("click", () => go(-1));
 nextButton.addEventListener("click", () => go(1));
 fullscreenButton.addEventListener("click", toggleFullscreen);
 for (const button of stripTools.querySelectorAll("[data-strip]")) button.addEventListener("click", () => setStrip(button.dataset.strip));
-gridButton.addEventListener("click", () => setState({ grid: !state.grid }));
+gridButton.addEventListener("click", () => setGrid(!state.grid));
+gridPinButton.addEventListener("click", () => setGridPinned(!state.gridPinned));
 document.addEventListener("keydown", (event) => {
   // 노트를 쓰거나 슬라이더를 움직이는 동안에는 단축키를 쓰지 않는다
   if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
-  if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") { event.preventDefault(); go(1); }
-  if (event.key === "ArrowLeft" || event.key === "PageUp") { event.preventDefault(); go(-1); }
+  // 목록 방향과 상관없이 왼쪽·위쪽은 이전, 오른쪽·아래쪽은 다음이다
+  if (["ArrowRight", "ArrowDown", "PageDown", " "].includes(event.key)) { event.preventDefault(); go(1); }
+  if (["ArrowLeft", "ArrowUp", "PageUp"].includes(event.key)) { event.preventDefault(); go(-1); }
   if (event.key === "Escape" && viewport.classList.contains("filled")) setFilled(false);
-  else if (event.key === "Escape" && state.grid) setState({ grid: false });
+  else if (event.key === "Escape" && state.grid && !state.gridPinned) setState({ grid: false });
   if (event.key === "f") toggleFullscreen();
 });
 // 목록 배치를 바꾸면 미리보기 칸마다 크기가 달라지므로 칸 하나하나를 지켜본다
@@ -581,3 +675,4 @@ for (const box of fitTargets.keys()) resizeObserver.observe(box);
 
 render();
 connectSync();
+loadNotesEditor();

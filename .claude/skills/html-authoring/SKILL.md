@@ -26,6 +26,8 @@ metadata:
 - 라이브러리는 로컬에 복사하지 않는다. 공식 CDN 링크(허용목록은 artifact-draft 스킬 참고)가 있으면 그 링크를 쓴다.
 - 여러 페이지가 함께 쓰는 틀 코드는 `packages/<이름>/`에 두고 npm에 배포한 뒤 jsDelivr npm 경로로 링크한다. 예: `deck.js`는 `packages/deck/`의 `@s-dante/artifact-deck`이며 `<script src="https://cdn.jsdelivr.net/npm/@s-dante/artifact-deck@0.1.0/deck.js"></script>`로 쓴다.
   - 버전은 정확히 고정한다(`@latest`·`@0` 금지. jsDelivr가 최대 7일 캐시한다).
+  - `npm run serve`는 틀 CDN 링크를 `packages/<이름>/` 작업본으로 바꿔 보여 준다. 배포 전에 로컬에서 확인한다.
+  - 덱 틀의 발표 노트 편집기는 공식 UMD 빌드가 없는 Tiptap을 쓰므로 `packages/deck/notes-editor.src.js`를 esbuild로 묶어 `notes-editor.js`로 함께 배포한다 (`prepublishOnly`). 번들은 커밋하지 않는다.
   - 틀 코드를 고치면 `package.json` 버전을 올리고, 사용자가 `npm publish`한 뒤, 그 틀을 쓰는 HTML(덱은 `skills/artifact-deck/assets/template.html`, `skills/artifact-deck/examples/deck-example.html`, `drafts/`의 덱들)의 버전을 함께 올린다.
   - `cdn.jsdelivr.net/gh/`나 다른 CDN은 CSP에 막히므로 쓰지 않는다. `fetch()`로 받아 `eval`하지 않고 `<script src>`로 링크한다.
 
