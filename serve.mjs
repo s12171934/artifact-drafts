@@ -5,6 +5,7 @@ import { watch } from "node:fs";
 import { join, extname, normalize } from "node:path";
 
 const draftsDirectory = new URL("./drafts/", import.meta.url).pathname;
+const deckSamplesPath = new URL("./dev/deck-samples.html", import.meta.url).pathname;
 const port = Number(process.env.PORT ?? 5178);
 
 const artifactContentSecurityPolicy = [
@@ -29,9 +30,22 @@ const contentTypes = { ".html": "text/html; charset=utf-8", ".js": "text/javascr
   ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp", ".woff2": "font/woff2", ".csv": "text/csv" };
 
 const reloadSubscribers = new Set();
-watch(draftsDirectory, { recursive: true }, () => {
-  for (const subscriber of reloadSubscribers) subscriber.write("data: reload\n\n");
-});
+const notifyReload = () => { for (const subscriber of reloadSubscribers) subscriber.write("data: reload\n\n"); };
+watch(draftsDirectory, { recursive: true }, notifyReload);
+watch(deckSamplesPath, notifyReload);
+
+// Deck drafts get dev/deck-samples.html's slides appended to their slide template (styles to the page end), only while serving.
+async function injectDeckSamples(pageHtml) {
+  // The last match: deck templates also mention the tag in their syntax comment above the real one.
+  const templateStart = [...pageHtml.matchAll(/<template\s+id="slides"/g)].at(-1)?.index;
+  if (templateStart === undefined) return pageHtml;
+  const templateEnd = pageHtml.indexOf("</template>", templateStart);
+  if (templateEnd === -1) return pageHtml;
+  const samples = (await readFile(deckSamplesPath, "utf8")).replace(/<!--[\s\S]*?-->/g, "");
+  const styles = samples.match(/<style>[\s\S]*?<\/style>/g)?.join("\n") ?? "";
+  const slides = samples.replace(/<style>[\s\S]*?<\/style>/g, "");
+  return pageHtml.slice(0, templateEnd) + slides + pageHtml.slice(templateEnd) + styles;
+}
 
 function resolveInsideDrafts(relativePath) {
   const resolvedPath = normalize(join(draftsDirectory, decodeURIComponent(relativePath)));
@@ -55,19 +69,21 @@ main{flex:1;display:flex;justify-content:center;overflow:auto}
 iframe{border:0;background:#fff;width:100%;height:100%;transition:width .15s}
 </style>
 <nav><a href="/">← drafts</a><strong>${draftPath}</strong>
-<span>theme</span><span id="themeButtons"></span><span>width</span><span id="widthButtons"></span>
+<span>theme</span><span id="themeButtons"></span><span>width</span><span id="widthButtons"></span><span>deck samples</span><span id="samplesButtons"></span>
 <span id="reloadStatus"></span></nav>
 <main><iframe id="frame" src="/raw/${draftPath}"></iframe></main>
 <script>
 const frame = document.getElementById("frame");
-const state = { theme: localStorage.getItem("theme") ?? "system", width: localStorage.getItem("width") ?? "full" };
+const state = { theme: localStorage.getItem("theme") ?? "system", width: localStorage.getItem("width") ?? "full", samples: localStorage.getItem("samples") ?? "on" };
 const themeOptions = ["system", "light", "dark"], widthOptions = { full: "100%", tablet: "768px", phone: "400px" };
 function applyState() {
   const root = frame.contentDocument?.documentElement;
   if (root) { if (state.theme === "system") root.removeAttribute("data-theme"); else root.setAttribute("data-theme", state.theme); }
   frame.style.width = widthOptions[state.width];
+  const src = "/raw/${draftPath}" + (state.samples === "off" ? "?samples=off" : "");
+  if (frame.getAttribute("src") !== src) frame.setAttribute("src", src);
   document.querySelectorAll("nav button").forEach((button) => button.setAttribute("aria-pressed", state[button.dataset.key] === button.dataset.value));
-  localStorage.setItem("theme", state.theme); localStorage.setItem("width", state.width);
+  localStorage.setItem("theme", state.theme); localStorage.setItem("width", state.width); localStorage.setItem("samples", state.samples);
 }
 function addButtons(containerId, key, values) {
   for (const value of values) {
@@ -77,7 +93,7 @@ function addButtons(containerId, key, values) {
     document.getElementById(containerId).append(button);
   }
 }
-addButtons("themeButtons", "theme", themeOptions); addButtons("widthButtons", "width", Object.keys(widthOptions));
+addButtons("themeButtons", "theme", themeOptions); addButtons("widthButtons", "width", Object.keys(widthOptions)); addButtons("samplesButtons", "samples", ["on", "off"]);
 frame.addEventListener("load", applyState); applyState();
 new EventSource("/events").onmessage = () => {
   frame.contentWindow.location.reload();
@@ -113,7 +129,12 @@ createServer(async (request, response) => {
     const fileContents = await readFile(filePath);
     const headers = { "content-type": contentTypes[extname(filePath)] ?? "application/octet-stream", "content-security-policy": artifactContentSecurityPolicy, "cache-control": "no-store" };
     response.writeHead(200, headers);
-    response.end(isRawPage && extname(filePath) === ".html" ? publishSkeletonHead + fileContents + "</body></html>" : fileContents);
+    if (isRawPage && extname(filePath) === ".html") {
+      const pageHtml = url.searchParams.get("samples") === "off" ? String(fileContents) : await injectDeckSamples(String(fileContents));
+      response.end(publishSkeletonHead + pageHtml + "</body></html>");
+    } else {
+      response.end(fileContents);
+    }
   } catch (error) {
     response.writeHead(error.code === "ENOENT" ? 404 : 500, { "content-type": "text/plain; charset=utf-8" });
     response.end(String(error.message));
