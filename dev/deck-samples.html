@@ -1,0 +1,105 @@
+<!--
+  npm run serve 가 덱 초안(<template id="slides"> 가 있는 페이지)을 보여 줄 때만 끼워 넣는 샘플 슬라이드.
+  <style> 은 페이지 끝에, <slide> 들은 슬라이드 템플릿 끝에 붙는다. 퍼블리시 파일에는 들어가지 않는다.
+  색은 템플릿 :root 토큰만 쓰고, 클래스와 조작 값 키는 sample- 로 시작해 초안과 겹치지 않게 한다.
+-->
+<style>
+  .sample-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin-top: auto; }
+  .sample-stats > div { border-top: 4px solid var(--accent); padding-top: 32px; display: grid; gap: 12px; }
+  .sample-stats strong { font-family: var(--mono); font-size: 112px; line-height: 1; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .sample-stats span { font-size: 30px; line-height: 1.4; color: var(--muted); }
+
+  .sample-code { margin: 0; padding: 40px 48px; border-radius: 12px; background: var(--slide-dark); color: var(--slide-dark-ink);
+    font: 28px/1.55 var(--mono); white-space: pre; overflow: hidden; }
+  .sample-code b { font-weight: 500; color: var(--accent); }
+
+  .sample-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; counter-reset: step; }
+  .sample-steps li { counter-increment: step; display: grid; gap: 16px; align-content: start; }
+  .sample-steps li::before { content: counter(step, decimal-leading-zero); font-family: var(--mono); font-size: 28px; color: var(--accent);
+    border-bottom: 2px solid var(--rule); padding-bottom: 16px; }
+  .sample-steps strong { font-size: 36px; line-height: 1.25; }
+  .sample-steps span { font-size: 28px; line-height: 1.45; color: var(--muted); }
+
+  .sample-quiz { display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .sample-quiz button { font: 600 34px/1.3 var(--sans); color: var(--ink); background: var(--stage); text-align: left;
+    border: 2px solid var(--rule); border-radius: 16px; padding: 40px; cursor: pointer; }
+  .sample-quiz button:hover:not(:disabled) { border-color: var(--accent); }
+  .sample-quiz button:disabled { cursor: default; }
+  .sample-quiz button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+  .sample-quiz button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+  .sample-quiz button[aria-pressed="true"][data-wrong] { border-color: var(--warn); background: var(--warn-soft); }
+  .sample-answer { border-radius: 16px; padding: 40px 48px; background: var(--accent-soft); }
+  .sample-answer[data-state="wrong"] { background: var(--warn-soft); }
+  .sample-answer[data-state="idle"] { background: transparent; border: 2px dashed var(--rule); }
+</style>
+
+<slide id="sample-stats" label="샘플 · 숫자" section="로컬 샘플 슬라이드" footer>
+  <notes>큰 숫자 세 개로 한 메시지를 받치는 슬라이드. npm run serve 에서만 보인다.</notes>
+  <span class="eyebrow">샘플 · 숫자</span>
+  <h2>틀이 맡는 것, 작성자가 쓰는 것</h2>
+  <p>슬라이드는 태그로 쓰고, 넘기기와 동기화는 틀이 한다.</p>
+  <div class="sample-stats">
+    <div><strong>1920</strong><span>고정 캔버스 폭(px). 화면에 맞춰 틀이 축소한다.</span></div>
+    <div><strong>3</strong><span>보기 모드. 혼자 보기, 발표자, 청중.</span></div>
+    <div><strong>0</strong><span>빌드 단계. HTML 파일을 그대로 퍼블리시한다.</span></div>
+  </div>
+</slide>
+
+<slide id="sample-code" label="샘플 · 코드" footer>
+  <notes>코드 블록 슬라이드. 12줄 안쪽으로 줄여서 보여 준다.</notes>
+  <span class="eyebrow">샘플 · 코드</span>
+  <h2>슬라이드 하나는 태그 하나</h2>
+  <pre class="sample-code">&lt;<b>slide</b> id="budget" label="예산" section="직접 조작" footer&gt;
+  &lt;<b>notes</b>&gt;슬라이더를 움직여 보세요.&lt;/notes&gt;
+  &lt;h2&gt;이 슬라이드를 옮긴다면&lt;/h2&gt;
+  &lt;input data-control="count" type="range"&gt;
+  &lt;script type="<b>text/slide</b>"&gt;
+    input.addEventListener("input", () =&gt; slide.<b>set</b>({ count: +input.value }));
+    slide.<b>onUpdate</b>((values) =&gt; { /* 화면은 여기서만 그린다 */ });
+  &lt;/script&gt;
+&lt;/slide&gt;</pre>
+</slide>
+
+<slide id="sample-steps" label="샘플 · 단계" footer>
+  <notes>가로 네 칸 단계 슬라이드. 칸마다 제목 한 줄, 설명 두 줄 정도가 적당하다.</notes>
+  <span class="eyebrow">샘플 · 단계</span>
+  <h2>덱을 만드는 순서</h2>
+  <ol class="sample-steps">
+    <li><strong>템플릿 복사</strong><span>assets/template.html 을 초안 폴더에 둔다.</span></li>
+    <li><strong>슬라이드 쓰기</strong><span>slide 태그에 마크업과 발표 노트를 채운다.</span></li>
+    <li><strong>조작 붙이기</strong><span>필요한 슬라이드에만 text/slide 스크립트를 넣는다.</span></li>
+    <li><strong>퍼블리시</strong><span>받은 주소를 data-url 에 적고 한 번 더 올린다.</span></li>
+  </ol>
+</slide>
+
+<slide id="sample-quiz" label="샘플 · 퀴즈" footer>
+  <notes>버튼으로 고르는 조작 슬라이드. 발표자가 고르면 청중 창에도 같은 답이 열린다.</notes>
+  <span class="eyebrow">샘플 · 퀴즈</span>
+  <h2>PPTX로 내려받아야 한다면?</h2>
+  <div class="sample-quiz">
+    <button type="button" data-pick="deck" data-wrong>이 HTML 덱</button>
+    <button type="button" data-pick="slides">Slides 타입</button>
+    <button type="button" data-pick="pptx" data-wrong>.pptx 파일 직접 작성</button>
+  </div>
+  <div class="sample-answer" data-out="answer"><p data-out="answerText"></p></div>
+  <script type="text/slide">
+    const answers = {
+      deck: "HTML 덱은 내려받기가 없다. 조작과 발표자 노트가 필요할 때 쓴다.",
+      slides: "맞다. Slides 타입은 PPTX · PDF로 내려받고 편집기에서 고칠 수 있다.",
+      pptx: "파일 자체를 요구받은 게 아니면 Slides 타입이 더 낫다.",
+    };
+    const buttons = [...slide.root.querySelectorAll("[data-pick]")];
+    const answer = slide.root.querySelector('[data-out="answer"]');
+    const answerText = slide.root.querySelector('[data-out="answerText"]');
+
+    for (const button of buttons) {
+      button.addEventListener("click", () => slide.set({ sampleQuizPick: button.dataset.pick }));
+    }
+
+    slide.onUpdate(({ sampleQuizPick }) => {
+      for (const button of buttons) button.setAttribute("aria-pressed", String(button.dataset.pick === sampleQuizPick));
+      answer.dataset.state = !sampleQuizPick ? "idle" : sampleQuizPick === "slides" ? "right" : "wrong";
+      answerText.textContent = answers[sampleQuizPick] ?? "하나를 골라 보세요.";
+    });
+  </script>
+</slide>

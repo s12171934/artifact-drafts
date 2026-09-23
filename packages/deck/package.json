@@ -1,6 +1,6 @@
 {
   "name": "@s-dante/artifact-deck",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Artifact 덱 틀: <slide> 템플릿을 읽어 보여 주고, 넘기고, 창끼리 동기화한다.",
   "main": "deck.js",
   "files": ["deck.js"],

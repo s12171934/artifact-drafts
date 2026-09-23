@@ -67,8 +67,16 @@ function initialMode() {
   try { return modes.includes(localStorage.getItem("deckMode")) ? localStorage.getItem("deckMode") : "solo"; } catch { return "solo"; }
 }
 
+// 슬라이드 목록 방향은 이 브라우저에만 기억한다
+const stripOrientations = ["horizontal", "vertical"];
+function initialStrip() {
+  try { return stripOrientations.includes(localStorage.getItem("deckStrip")) ? localStorage.getItem("deckStrip") : "horizontal"; } catch { return "horizontal"; }
+}
+
 let state = {
   mode: initialMode(),
+  strip: initialStrip(),
+  grid: false,
   index: Math.max(0, indexOfSlide(hashToken)),
   values: {},
   canPresent: true,
@@ -390,8 +398,10 @@ const nextButton = document.getElementById("nextButton");
 const syncStatus = document.getElementById("syncStatus");
 const fullscreenButton = document.getElementById("fullscreenButton");
 const presenterModeButton = document.getElementById("presenterModeButton");
+const stripTools = document.getElementById("stripTools");
+const gridButton = document.getElementById("gridButton");
 
-// 하단 슬라이드 목록: 각 항목이 해당 슬라이드를 축소해 보여 준다
+// 슬라이드 목록: 각 항목이 해당 슬라이드를 축소해 보여 준다. 누르면 그 슬라이드로 가고 펼친 목록은 접힌다
 const stripItems = deck.slides.map((slide, index) => {
   const button = document.createElement("button");
   button.type = "button";
@@ -404,13 +414,14 @@ const stripItems = deck.slides.map((slide, index) => {
   const label = document.createElement("span");
   label.textContent = `${index + 1}. ${slide.label}`;
   button.append(frame, label);
-  button.addEventListener("click", () => setState({ index }));
+  button.addEventListener("click", () => setState({ index, grid: false }));
   strip.append(button);
   return { slide, button, frame, target, mounted: mountSlide(target, slide, { interactive: false, preview: true }) };
 });
 
 let current = null;
 let renderedIndex = -1;
+let renderedStrip = "";
 
 function updateValues() {
   current?.update();
@@ -429,8 +440,16 @@ function render() {
 
   nav.hidden = isAudience;
   strip.hidden = isAudience;
+  stripTools.hidden = isAudience;
   presenterPanel.hidden = !isPresenter;
-  layout.classList.toggle("with-panel", isPresenter);
+  const showGrid = state.grid && !isAudience;
+  layout.dataset.mode = state.mode;
+  layout.dataset.strip = state.strip;
+  layout.toggleAttribute("data-grid", showGrid);
+  for (const button of stripTools.querySelectorAll("[data-strip]")) button.setAttribute("aria-pressed", String(button.dataset.strip === state.strip));
+  gridButton.setAttribute("aria-expanded", String(showGrid));
+  gridButton.setAttribute("aria-pressed", String(showGrid));
+  gridButton.textContent = showGrid ? "목록 접기" : "전체 펼치기";
   if (isPresenter) renderPresenterPanel();
 
   const section = sectionOf(state.index);
@@ -442,14 +461,21 @@ function render() {
   presenterModeButton.hidden = !state.canPresent;
   renderStatus();
   fitAll();
-  if (!isAudience && renderedIndex !== state.index) scrollStripTo(state.index);
+  // 목록 배치가 바뀌었으면 바로, 슬라이드만 바뀌었으면 부드럽게 현재 항목을 가운데로 가져온다
+  const stripLayout = `${state.strip}/${showGrid}`;
+  if (!isAudience && (renderedIndex !== state.index || renderedStrip !== stripLayout)) scrollStripTo(state.index, renderedStrip === stripLayout);
   renderedIndex = state.index;
+  renderedStrip = stripLayout;
 }
 
-function scrollStripTo(index) {
+function scrollStripTo(index, smooth) {
   const { button } = stripItems[index];
   const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  strip.scrollTo({ left: button.offsetLeft - (strip.clientWidth - button.offsetWidth) / 2, behavior: reduceMotion ? "auto" : "smooth" });
+  strip.scrollTo({
+    left: button.offsetLeft - (strip.clientWidth - button.offsetWidth) / 2,
+    top: button.offsetTop - (strip.clientHeight - button.offsetHeight) / 2,
+    behavior: smooth && !reduceMotion ? "smooth" : "auto",
+  });
 }
 
 function renderPresenterPanel() {
@@ -483,6 +509,7 @@ function renderStatus() {
 }
 
 // 1920×1080 캔버스를 박스 안에 맞춰 축소하고 가운데 둔다
+const fitTargets = new Map([[viewport, canvas], ...stripItems.map((item) => [item.frame, item.target])]);
 function fit(box, target) {
   const scale = Math.min(box.clientWidth / 1920, box.clientHeight / 1080);
   const x = (box.clientWidth - 1920 * scale) / 2;
@@ -515,6 +542,11 @@ async function toggleFullscreen() {
   if (viewport.classList.contains("filled")) return setFilled(false);
   try { await viewport.requestFullscreen(); } catch { setFilled(true); }
 }
+function setStrip(orientation) {
+  try { localStorage.setItem("deckStrip", orientation); } catch {}
+  setState({ strip: orientation });
+}
+
 function setFilled(on) {
   viewport.classList.toggle("filled", on);
   fullscreenButton.textContent = on ? "닫기" : "전체화면";
@@ -530,16 +562,22 @@ for (const button of document.querySelectorAll("#modes button")) button.addEvent
 prevButton.addEventListener("click", () => go(-1));
 nextButton.addEventListener("click", () => go(1));
 fullscreenButton.addEventListener("click", toggleFullscreen);
+for (const button of stripTools.querySelectorAll("[data-strip]")) button.addEventListener("click", () => setStrip(button.dataset.strip));
+gridButton.addEventListener("click", () => setState({ grid: !state.grid }));
 document.addEventListener("keydown", (event) => {
   // 노트를 쓰거나 슬라이더를 움직이는 동안에는 단축키를 쓰지 않는다
   if (event.target.closest?.("input, textarea, select, [contenteditable]")) return;
   if (event.key === "ArrowRight" || event.key === "PageDown" || event.key === " ") { event.preventDefault(); go(1); }
   if (event.key === "ArrowLeft" || event.key === "PageUp") { event.preventDefault(); go(-1); }
   if (event.key === "Escape" && viewport.classList.contains("filled")) setFilled(false);
+  else if (event.key === "Escape" && state.grid) setState({ grid: false });
   if (event.key === "f") toggleFullscreen();
 });
-new ResizeObserver(fitAll).observe(viewport);
-new ResizeObserver(fitAll).observe(strip);
+// 목록 배치를 바꾸면 미리보기 칸마다 크기가 달라지므로 칸 하나하나를 지켜본다
+const resizeObserver = new ResizeObserver((entries) => {
+  for (const entry of entries) fit(entry.target, fitTargets.get(entry.target));
+});
+for (const box of fitTargets.keys()) resizeObserver.observe(box);
 
 render();
 connectSync();

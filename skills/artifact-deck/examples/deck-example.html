@@ -22,12 +22,29 @@
     --slide-dark: #0b100d; --slide-dark-ink: #e3ebe5; color-scheme: dark;
   }
 
-  body { background: var(--ground); color: var(--ink); font-family: var(--sans); padding-inline: 16px; padding-block: 24px 40px; }
-  .shell { max-width: 1200px; margin: 0 auto; display: grid; gap: 14px; }
+  /* 셸은 화면 높이에 맞춘다. 페이지는 스크롤되지 않고, 남는 공간에 맞춰 메인 슬라이드가 줄어든다 */
+  body { background: var(--ground); color: var(--ink); font-family: var(--sans); padding: 12px 16px; box-sizing: border-box; overflow: hidden;
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); }
+  .shell { height: 100%; max-width: 1440px; margin: 0 auto; display: grid; gap: 12px;
+    grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) auto; grid-template-areas: "bar" "main" "strip"; }
+  .shell[data-mode="presenter"] { grid-template-columns: minmax(0, 1fr) minmax(260px, 360px); grid-template-areas: "bar bar" "main panel" "strip strip"; }
+  .shell[data-mode="audience"] { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "bar" "main"; }
+  @media (min-width: 900px) {
+    .shell[data-strip="vertical"]:not([data-mode="audience"]) { grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr);
+      grid-template-areas: "bar bar" "strip main"; }
+    .shell[data-strip="vertical"][data-mode="presenter"] { grid-template-columns: 200px minmax(0, 1fr) minmax(260px, 360px);
+      grid-template-areas: "bar bar bar" "strip main panel"; }
+  }
+  @media (max-width: 899px) {
+    .shell[data-mode="presenter"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr) minmax(0, 1fr) auto;
+      grid-template-areas: "bar" "main" "panel" "strip"; }
+    .tools [data-strip] { display: none; }
+  }
 
-  .bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; }
+  .bar { grid-area: bar; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; }
   .bar h1 { margin: 0; font-size: 18px; font-weight: 600; }
   .bar .section { font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .bar-controls { display: flex; flex-wrap: wrap; gap: 8px 16px; }
 
   .modes { display: flex; gap: 4px; flex-wrap: wrap; }
   .modes button { font: 500 13px var(--sans); color: var(--muted); background: transparent; border: 1px solid var(--rule);
@@ -35,15 +52,14 @@
   .modes button[aria-pressed="true"] { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
   .modes button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .layout { display: grid; gap: 16px; }
-  .layout.with-panel { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
-  @media (max-width: 900px) { .layout.with-panel { grid-template-columns: minmax(0, 1fr); } }
-  .main { display: grid; gap: 14px; min-width: 0; }
+  .main { grid-area: main; display: grid; grid-template-rows: minmax(0, 1fr) auto auto; gap: 10px; min-width: 0; min-height: 0; }
+  .stage { container-type: size; display: grid; place-items: end center; min-height: 0; }
 
-  /* 1920×1080 캔버스를 JS가 폭에 맞춰 축소한다 */
+  /* 1920×1080 캔버스를 JS가 박스에 맞춰 축소한다. 메인 뷰포트는 무대 칸의 폭과 높이 중 좁은 쪽에 맞춘다 */
   .viewport { position: relative; width: 100%; max-width: 100%; aspect-ratio: 16 / 9; overflow: hidden;
-    border: 1px solid var(--rule); border-radius: 6px; background: var(--stage); }
-  .viewport.filled { position: fixed; inset: 0; z-index: 10; aspect-ratio: auto; border: 0; border-radius: 0; background: var(--letterbox);
+    border: 1px solid var(--rule); border-radius: 6px; background: var(--stage); box-sizing: border-box; }
+  .stage .viewport { width: min(100cqw, 100cqh * 16 / 9); }
+  .stage .viewport.filled { position: fixed; inset: 0; z-index: 10; width: auto; aspect-ratio: auto; border: 0; border-radius: 0; background: var(--letterbox);
     padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
   .viewport:fullscreen { background: var(--letterbox); border: 0; border-radius: 0; }
   .canvas { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; transform-origin: 0 0; }
@@ -52,10 +68,11 @@
     background: var(--stage); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px; cursor: pointer; opacity: .85; }
   .corner:hover, .corner:focus-visible { opacity: 1; outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  .panel { display: grid; gap: 14px; align-content: start; }
+  .panel { grid-area: panel; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow-y: auto; }
   .panel h2 { margin: 0; font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
   .panel .block { display: grid; gap: 8px; }
-  .notes { box-sizing: border-box; width: 100%; min-height: 240px; margin: 0; padding: 12px 14px; resize: vertical;
+  .panel .block.grow { flex: 1; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 200px; }
+  .notes { box-sizing: border-box; width: 100%; height: 100%; min-height: 120px; margin: 0; padding: 12px 14px; resize: none;
     font: 16px/1.6 var(--sans); color: var(--ink); background: var(--stage); border: 1px solid var(--rule); border-radius: 6px; }
   .notes:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; border-color: var(--accent); }
   .notes-bar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
@@ -65,7 +82,7 @@
   .notes-bar .save:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .notes-status { font-family: var(--mono); font-size: 12px; color: var(--muted); }
   .notes-status[data-state="dirty"] { color: var(--warn); }
-  .status { font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .status { margin: 0; font-family: var(--mono); font-size: 13px; color: var(--muted); display: flex; gap: 8px; align-items: center; }
   .status::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--rule); flex: none; }
   .status[data-state="live"]::before { background: var(--accent); }
   .status[data-state="error"]::before { background: var(--warn); }
@@ -121,55 +138,70 @@
   .nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .nav .count { font-family: var(--mono); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; margin-left: auto; }
 
-  /* 하단 슬라이드 목록: 좌우로 스크롤하며 모든 슬라이드를 축소해 보여 준다 */
-  .strip { position: relative; display: flex; gap: 12px; overflow-x: auto; padding-block: 4px 10px; scroll-snap-type: x proximity; }
-  .strip button { flex: none; width: 208px; display: grid; gap: 6px; padding: 6px; font: 13px var(--sans); color: var(--muted);
+  /* 슬라이드 목록: 가로(하단 한 줄), 세로(왼쪽 한 열), 펼치기(셸 아래 전체를 덮는 바둑판) */
+  .strip { grid-area: strip; position: relative; display: flex; gap: 10px; overflow: auto; padding: 4px 4px 8px; min-height: 0;
+    scroll-snap-type: x proximity; }
+  .strip button { flex: none; width: 176px; display: grid; gap: 6px; align-content: start; padding: 6px; font: 13px var(--sans); color: var(--muted);
     text-align: left; background: transparent; border: 1px solid var(--rule); border-radius: 8px; cursor: pointer; scroll-snap-align: start; }
+  .strip button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .strip button .viewport { border-radius: 4px; }
   .strip button:hover { border-color: var(--accent); }
   .strip button[aria-current="true"] { color: var(--ink); border-color: var(--accent); background: var(--accent-soft); }
   .strip button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (min-width: 900px) {
+    .shell[data-strip="vertical"] .strip { flex-direction: column; scroll-snap-type: y proximity; }
+    .shell[data-strip="vertical"] .strip button { width: auto; }
+  }
+  .shell[data-grid] .strip { grid-row: 2 / -1; grid-column: 1 / -1; z-index: 5; display: grid; align-content: start; gap: 16px;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); background: var(--ground); scroll-snap-type: none; }
+  .shell[data-grid] .strip button { width: auto; }
 
-  @media (prefers-reduced-motion: reduce) { .meter > i { transition: none; } }
 </style>
 
-<div class="shell">
+<div class="shell" id="layout">
   <header class="bar">
     <h1 id="deckTitle"></h1>
-    <div class="modes" id="modes" role="group" aria-label="보기 모드">
-      <button type="button" data-mode="solo">혼자 보기</button>
-      <button type="button" data-mode="presenter" id="presenterModeButton">발표자</button>
-      <button type="button" data-mode="audience">청중</button>
+    <div class="bar-controls">
+      <div class="modes tools" id="stripTools" role="group" aria-label="슬라이드 목록">
+        <button type="button" data-strip="horizontal">가로 목록</button>
+        <button type="button" data-strip="vertical">세로 목록</button>
+        <button type="button" id="gridButton" aria-controls="strip" aria-expanded="false">전체 펼치기</button>
+      </div>
+      <div class="modes" id="modes" role="group" aria-label="보기 모드">
+        <button type="button" data-mode="solo">혼자 보기</button>
+        <button type="button" data-mode="presenter" id="presenterModeButton">발표자</button>
+        <button type="button" data-mode="audience">청중</button>
+      </div>
     </div>
   </header>
-  <div class="layout" id="layout">
-    <div class="main">
+  <div class="main">
+    <div class="stage">
       <div class="viewport" id="viewport">
         <div class="canvas" id="canvas"></div>
         <button class="corner" id="fullscreenButton" type="button">전체화면</button>
       </div>
-      <div class="nav" id="nav">
-        <button id="prevButton" type="button">← 이전</button>
-        <button id="nextButton" type="button">다음 →</button>
-        <span class="count" id="counter"></span>
-      </div>
-      <p class="status" id="syncStatus" data-state="idle"></p>
     </div>
-    <aside class="panel" id="presenterPanel" hidden>
-      <div class="block">
-        <h2><label for="notesInput">발표 노트 · 나만 보기</label></h2>
-        <textarea class="notes" id="notesInput" rows="10" spellcheck="false"></textarea>
-        <div class="notes-bar">
-          <button class="save" id="saveNotesButton" type="button" disabled>노트 저장</button>
-          <span class="notes-status" id="notesStatus" data-state="idle"></span>
-        </div>
-      </div>
-      <div class="block">
-        <h2>청중 창</h2>
-        <p class="audience-link" id="audienceLink"></p>
-      </div>
-    </aside>
+    <div class="nav" id="nav">
+      <button id="prevButton" type="button">← 이전</button>
+      <button id="nextButton" type="button">다음 →</button>
+      <span class="count" id="counter"></span>
+    </div>
+    <p class="status" id="syncStatus" data-state="idle"></p>
   </div>
+  <aside class="panel" id="presenterPanel" hidden>
+    <div class="block grow">
+      <h2><label for="notesInput">발표 노트 · 나만 보기</label></h2>
+      <textarea class="notes" id="notesInput" spellcheck="false"></textarea>
+      <div class="notes-bar">
+        <button class="save" id="saveNotesButton" type="button" disabled>노트 저장</button>
+        <span class="notes-status" id="notesStatus" data-state="idle"></span>
+      </div>
+    </div>
+    <div class="block">
+      <h2>청중 창</h2>
+      <p class="audience-link" id="audienceLink"></p>
+    </div>
+  </aside>
   <nav class="strip" id="strip" aria-label="슬라이드 목록"></nav>
 </div>
 
@@ -182,7 +214,7 @@
                 퍼블리시 후 받은 주소를 여기 적는다. 비우면 링크 대신 "링크를 직접 열라"는 안내가 나온다
   <slide id label [section] [class] [footer]>
     id       슬라이드 고유 이름 (#id 링크로 바로 열린다)
-    label    하단 슬라이드 목록에 보이는 이름
+    label    슬라이드 목록에 보이는 이름
     section  이 슬라이드에서 시작하는 섹션 이름
     class    슬라이드 바탕에 붙일 클래스 (dark, cover 등)
     footer   붙이면 하단에 덱 제목과 쪽 번호를 단다
@@ -281,4 +313,4 @@
   </slide>
 </template>
 
-<script src="https://cdn.jsdelivr.net/npm/@s-dante/artifact-deck@0.1.0/deck.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@s-dante/artifact-deck@0.2.0/deck.js"></script>
