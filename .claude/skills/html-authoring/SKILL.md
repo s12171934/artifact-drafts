@@ -1,6 +1,8 @@
 ---
 name: html-authoring
 description: 이 저장소에서 HTML을 새로 쓰거나 고칠 때 항상 로드한다. HTML 안의 JavaScript를 어떻게 둘지 정한다. 원칙은 스크립트를 별도 .js 파일로 분리하고, 사용자가 명시한 경우에만 HTML 안에 인라인하는 것이다. "html 작성", "페이지 만들어줘", "스크립트 추가", "초안 수정" 같은 요청에서 artifact-draft 스킬과 함께 쓴다.
+metadata:
+  internal: true
 ---
 
 # HTML 작성: 스크립트 분리
@@ -24,7 +26,7 @@ description: 이 저장소에서 HTML을 새로 쓰거나 고칠 때 항상 로�
 - 라이브러리는 로컬에 복사하지 않는다. 공식 CDN 링크(허용목록은 artifact-draft 스킬 참고)가 있으면 그 링크를 쓴다.
 - 여러 페이지가 함께 쓰는 틀 코드는 `packages/<이름>/`에 두고 npm에 배포한 뒤 jsDelivr npm 경로로 링크한다. 예: `deck.js`는 `packages/deck/`의 `@s-dante/artifact-deck`이며 `<script src="https://cdn.jsdelivr.net/npm/@s-dante/artifact-deck@0.1.0/deck.js"></script>`로 쓴다.
   - 버전은 정확히 고정한다(`@latest`·`@0` 금지. jsDelivr가 최대 7일 캐시한다).
-  - 틀 코드를 고치면 `package.json` 버전을 올리고, 사용자가 `npm publish`한 뒤, 그 틀을 쓰는 HTML의 버전을 함께 올린다.
+  - 틀 코드를 고치면 `package.json` 버전을 올리고, 사용자가 `npm publish`한 뒤, 그 틀을 쓰는 HTML(덱은 `skills/artifact-deck/assets/template.html`, `skills/artifact-deck/examples/deck-example.html`, `drafts/`의 덱들)의 버전을 함께 올린다.
   - `cdn.jsdelivr.net/gh/`나 다른 CDN은 CSP에 막히므로 쓰지 않는다. `fetch()`로 받아 `eval`하지 않고 `<script src>`로 링크한다.
 
 ## 3. 예외: 인라인
@@ -32,4 +34,4 @@ description: 이 저장소에서 HTML을 새로 쓰거나 고칠 때 항상 로�
 - 사용자가 "HTML 안에 스크립트를 넣어라", "한 파일로 만들어라"처럼 **명시한 경우에만** HTML 안에 `<script>…</script>`로 쓴다.
 - 짧아서, 간단해서, 한 번만 써서 등의 이유로 스스로 인라인하지 않는다.
 - 인라인한 스크립트는 퍼블리시 빌드가 그대로 둔다. 이 경우에도 1절의 인라인 이벤트 속성 금지는 지킨다.
-- 사용자가 정한 구조로 HTML 안에 둔 스크립트는 `.js`로 옮기지 않는다. 예: `drafts/deck.html`의 슬라이드별 스크립트는 `<slide>` 안의 `<script type="text/slide">`에 둔다. 이 스크립트는 틀(`@s-dante/artifact-deck`의 `deck.js`)이 슬라이드를 붙일 때 실행한다.
+- 사용자가 정한 구조로 HTML 안에 둔 스크립트는 `.js`로 옮기지 않는다. 예: 덱(`skills/artifact-deck/`의 템플릿과 예제)의 슬라이드별 스크립트는 `<slide>` 안의 `<script type="text/slide">`에 둔다. 이 스크립트는 틀(`@s-dante/artifact-deck`의 `deck.js`)이 슬라이드를 붙일 때 실행한다.

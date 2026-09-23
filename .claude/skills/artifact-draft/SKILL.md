@@ -1,6 +1,8 @@
 ---
 name: artifact-draft
 description: 이 저장소에서 HTML을 새로 만들거나 고칠 때 항상 로드한다. drafts/ 아래 초안이든 다른 경로의 HTML이든, 생성한 파일이 수정 없이 그대로 Artifact로 퍼블리시될 수 있도록 Artifact 페이지 규칙(artifact-design 스킬)을 따르게 한다. "초안 만들어줘", "html 페이지 만들어", "drafts에 추가", "아티팩트용 페이지" 같은 요청에서 쓴다.
+metadata:
+  internal: true
 ---
 
 # Artifact 초안 작성
@@ -60,3 +62,11 @@ description: 이 저장소에서 HTML을 새로 만들거나 고칠 때 항상 �
 - 인라인된 스크립트는 `files`로 따로 올리지 않는다. 이미지·데이터 등 나머지 에셋은 `files`로 넘기고, 이때 `drafts/` 안의 원본 파일을 그대로 쓴다.
 - 첫 퍼블리시에는 `icon`(일반 명사 한 단어)과 한 문장 `description`을 넣는다. 이 둘은 도구 파라미터라서 HTML을 건드리지 않는다.
 - 다시 퍼블리시할 때도 다시 빌드한 뒤 같은 `dist/` 경로를 넘긴다. 그래야 같은 URL로 갱신된다. 다른 대화에서 갱신할 때는 기존 아티팩트의 `url`도 함께 넘긴다.
+
+## 5. 발표 덱
+
+슬라이드 덱은 배포용 스킬 `skills/artifact-deck/SKILL.md`를 읽고 그 절차를 따른다. 템플릿은 `skills/artifact-deck/assets/template.html`, 예제는 `skills/artifact-deck/examples/deck-example.html`이다 (`drafts/deck-example.html`은 미리보기용 심볼릭 링크).
+
+- 이 저장소에서는 덱 초안을 `drafts/<짧은-이름>.html`에 두고 `npm run serve`로 확인한다. 덱에는 로컬 스크립트가 없어 빌드 결과가 초안과 같다.
+- 템플릿·예제·스킬 문서를 고치면 그것이 곧 배포되는 스킬이다. 이 저장소 전용 규칙(`drafts/`, `npm run build`, `serve.mjs`)을 그 스킬에 쓰지 않는다. 스킬을 설치한 다른 프로젝트에는 이 파일들이 없다.
+- 틀 자체(넘기기, 동기화, 노트, 슬라이드 목록)를 고쳐야 하면 `packages/deck/deck.js`를 고치고 버전을 올린다. 절차는 `html-authoring` 스킬을 따른다. 템플릿과 예제의 `<script src>` 버전도 함께 올린다.
